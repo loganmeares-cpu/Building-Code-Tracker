@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Building Code Tracker — FiscalNote</title>
+<style>
+  :root {
+    --bg: #f8f7f4;
+    --surface: #ffffff;
+    --border: rgba(0,0,0,0.1);
+    --border-strong: rgba(0,0,0,0.18);
+    --text: #1a1a18;
+    --muted: #6b6b66;
+    --hint: #9b9b94;
+    --accent: #1a1a18;
+    --icc: #1558b0;
+    --icc-bg: #e8f0fb;
+    --nfpa: #b91c1c;
+    --nfpa-bg: #fde8e8;
+    --nec: #166534;
+    --nec-bg: #dcfce7;
+    --ashrae: #92400e;
+    --ashrae-bg: #fef3c7;
+    --multi: #5b21b6;
+    --multi-bg: #ede9fe;
+    --state: #374151;
+    --state-bg: #f3f4f6;
+    --alert-red: #b91c1c;
+    --alert-red-bg: #fef2f2;
+    --alert-yellow: #92400e;
+    --alert-yellow-bg: #fffbeb;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; font-size: 14px; }
+
+  /* HEADER */
+  .header { background: var(--text); color: #fff; padding: 1.25rem 2rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; position: sticky; top: 0; z-index: 100; }
+  .header-left { display: flex; align-items: center; gap: 1rem; }
+  .logo { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
+  .logo span { opacity: 0.45; font-weight: 400; }
+  .last-scan { font-size: 12px; opacity: 0.55; }
+  .header-right { display: flex; gap: 8px; align-items: center; }
+
+  /* LAYOUT */
+  .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1.5rem; }
+  .two-col { display: grid; grid-template-columns: 240px 1fr; gap: 1.5rem; align-items: start; }
+  @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* SIDEBAR NAV */
+  .sidebar { position: sticky; top: 72px; }
+  .nav-section { margin-bottom: 1.25rem; }
+  .nav-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--hint); padding: 0 0.75rem; margin-bottom: 4px; }
+  .nav-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; color: var(--muted); transition: all 0.12s; text-decoration: none; }
+  .nav-item:hover { background: var(--border); color: var(--text); }
+  .nav-item.active { background: var(--text); color: #fff; font-weight: 500; }
+  .nav-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+  /* STATS BAR */
+  .stats-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+  @media (max-width: 600px) { .stats-bar { grid-template-columns: repeat(2, 1fr); } }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; }
+  .stat-num { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* PANELS */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem; }
+  .card-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 1rem; }
+
+  /* ALERTS */
+  .alert { border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: 0.875rem; border-left: 3px solid; }
+  .alert-red { background: var(--alert-red-bg); border-color: var(--alert-red); }
+  .alert-yellow { background: var(--alert-yellow-bg); border-color: #d97706; }
+  .alert-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .alert-red .alert-title { color: var(--alert-red); }
+  .alert-yellow .alert-title { color: var(--alert-yellow); }
+  .alert-body { font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .alert-meta { font-size: 11px; color: var(--hint); margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .flag { display: inline-block; background: var(--alert-red); color: #fff; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; letter-spacing: 0.04em; }
+  .flag-y { background: #d97706; }
+
+  /* BADGES */
+  .badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 99px; white-space: nowrap; vertical-align: middle; }
+  .b-icc { background: var(--icc-bg); color: var(--icc); }
+  .b-nfpa { background: var(--nfpa-bg); color: var(--nfpa); }
+  .b-nec { background: var(--nec-bg); color: var(--nec); }
+  .b-ashrae { background: var(--ashrae-bg); color: var(--ashrae); }
+  .b-multi { background: var(--multi-bg); color: var(--multi); }
+  .b-state { background: var(--state-bg); color: var(--state); }
+
+  /* SOURCE ROWS */
+  .source-row { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .source-row:last-child { border-bottom: none; }
+  .src-info { flex: 1; min-width: 0; }
+  .src-name { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 1px; }
+  .src-desc { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+  .src-url { font-size: 11px; color: #2563eb; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; max-width: 100%; }
+  .src-url:hover { text-decoration: underline; }
+
+  /* STATE TABLE */
+  .state-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .state-table th { text-align: left; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--hint); padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .state-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .state-table tr:last-child td { border-bottom: none; }
+  .state-table tr:hover td { background: var(--bg); }
+  .state-name { font-weight: 600; font-size: 13px; }
+  .state-url a { color: #2563eb; font-size: 11px; text-decoration: none; display: block; }
+  .state-url a:hover { text-decoration: underline; }
+  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+  .dot-active { background: #16a34a; }
+  .dot-watch { background: #d97706; }
+  .dot-monitor { background: #6b6b66; }
+
+  /* BUTTONS */
+  .btn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; padding: 8px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: transparent; color: var(--text); cursor: pointer; text-decoration: none; transition: all 0.12s; }
+  .btn:hover { background: var(--bg); }
+  .btn-dark { background: var(--text); color: #fff; border-color: var(--text); }
+  .btn-dark:hover { opacity: 0.85; background: var(--text); }
+  .btn-sm { font-size: 11px; padding: 5px 10px; }
+
+  /* DIGEST SECTION */
+  .digest-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem; }
+  .digest-date { font-size: 12px; color: var(--muted); }
+  .digest-to { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  table.summary { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 1.25rem; }
+  table.summary td, table.summary th { padding: 7px 12px; border: 1px solid var(--border); }
+  table.summary th { background: var(--bg); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  .meetings-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .meetings-table th { text-align: left; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--hint); padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .meetings-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .meetings-table tr:last-child td { border-bottom: none; }
+  .date-imminent { color: var(--alert-red); font-weight: 600; }
+
+  /* SCAN PANEL */
+  .scan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
+  @media (max-width: 500px) { .scan-grid { grid-template-columns: 1fr; } }
+  .scope-btn { padding: 10px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; font-size: 12px; font-weight: 500; text-align: left; transition: all 0.12s; }
+  .scope-btn:hover { border-color: var(--text); }
+  .scope-btn.selected { background: var(--text); color: #fff; border-color: var(--text); }
+  .scope-title { font-weight: 600; display: block; margin-bottom: 2px; }
+  .scope-sub { font-size: 11px; opacity: 0.7; }
+  .check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 1.25rem; }
+  .check-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  input[type=text], select { font-size: 13px; padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); width: 100%; }
+  .field-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .fields-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 1rem; }
+  .field { flex: 1; min-width: 160px; }
+  .hint-text { font-size: 12px; color: var(--hint); margin-top: 8px; }
+
+  /* FOOTER */
+  footer { text-align: center; padding: 2rem; font-size: 12px; color: var(--hint); border-top: 1px solid var(--border); margin-top: 2rem; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">Building Code Tracker <span>/ FiscalNote</span></div>
+    <div class="last-scan">Last scan: April 29, 2026 · 240+ sources · Mon/Wed/Fri</div>
+  </div>
+  <div class="header-right">
+    <button class="btn btn-sm" onclick="navTo('scan')">⟳ Run scan</button>
+    <button class="btn btn-dark btn-sm" onclick="window.print()">↓ Save / Print</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="two-col">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="nav-section">
+        <div class="nav-label">Digest</div>
+        <a class="nav-item active" onclick="navTo('digest')" href="#">
+          <span class="nav-dot" style="background:#1a1a18;"></span> Latest Digest
+        </a>
+        <a class="nav-item" onclick="navTo('notable')" href="#">
+          <span class="nav-dot" style="background:#b91c1c;"></span> Notable Items (6)
+        </a>
+        <a class="nav-item" onclick="navTo('meetings')" href="#">
+          <span class="nav-dot" style="background:#d97706;"></span> Upcoming Meetings
+        </a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-label">Sources</div>
+        <a class="nav-item" onclick="navTo('national')" href="#">
+          <span class="nav-dot" style="background:#5b21b6;"></span> National Bodies
+        </a>
+        <a class="nav-item" onclick="navTo('icc')" href="#">
+          <span class="nav-dot" style="background:#1558b0;"></span> ICC Suite
+        </a>
+        <a class="nav-item" onclick="navTo('nfpa')" href="#">
+          <span class="nav-dot" style="background:#b91c1c;"></span> NFPA / NEC
+        </a>
+        <a class="nav-item" onclick="navTo('ashrae')" href="#">
+          <span class="nav-dot" style="background:#92400e;"></span> ASHRAE / Energy
+        </a>
+        <a class="nav-item" onclick="navTo('states')" href="#">
+          <span class="nav-dot" style="background:#374151;"></span> State Sites (157)
+        </a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-label">Tools</div>
+        <a class="nav-item" onclick="navTo('scan')" href="#">
+          <span class="nav-dot" style="background:#16a34a;"></span> Run a Scan
+        </a>
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div>
+
+      <!-- STATS BAR -->
+      <div class="stats-bar">
+        <div class="stat-card"><div class="stat-num">240+</div><div class="stat-label">Sites tracked</div></div>
+        <div class="stat-card"><div class="stat-num">50</div><div class="stat-label">States + DC</div></div>
+        <div class="stat-card"><div class="stat-num">4</div><div class="stat-label">Code families</div></div>
+        <div class="stat-card"><div class="stat-num" style="color:#b91c1c;">6</div><div class="stat-label">Notable items</div></div>
+        <div class="stat-card"><div class="stat-num">Apr 29</div><div class="stat-label">Last scanned</div></div>
+      </div>
+
+      <!-- DIGEST PANEL -->
+      <div class="panel active" id="panel-digest">
+        <div class="card">
+          <div class="digest-header">
+            <div>
+              <div class="card-title">🏗 Building Code & Agenda Monitor — Full Scan Digest</div>
+              <div class="digest-date">Wednesday, April 29, 2026 · Mon/Wed/Fri schedule</div>
+              <div class="digest-to">→ logan.meares@fiscalnote.com · Slack personal DM</div>
+            </div>
+            <button class="btn btn-sm" onclick="navTo('scan')">Re-scan ↗</button>
+          </div>
+
+          <table class="summary">
+            <tr><th>Category</th><th>Count</th></tr>
+            <tr><td>⭐ Notable / High-Priority Items</td><td><strong style="color:#b91c1c;">6</strong></td></tr>
+            <tr><td>ICC code adoptions / changes active</td><td>9</td></tr>
+            <tr><td>NFPA / NEC updates</td><td>3</td></tr>
+            <tr><td>ASHRAE / energy code changes</td><td>5</td></tr>
+            <tr><td>Meeting agendas posted</td><td>7</td></tr>
+            <tr><td>States with active updates</td><td>14</td></tr>
+          </table>
+
+          <p style="font-size:13px; color:var(--muted);">Click <strong>Notable Items</strong> in the sidebar for full flag-by-flag breakdown, or <strong>Upcoming Meetings</strong> for the calendar view. All source links are live and clickable throughout this tracker.</p>
+        </div>
+      </div>
+
+      <!-- NOTABLE PANEL -->
+      <div class="panel" id="panel-notable">
+        <div class="card">
+          <div class="card-title">⭐ Notable Items — April 29, 2026</div>
+
+          <div class="alert alert-red">
+            <div class="alert-title"><span class="flag">CRITICAL</span> Washington State — 2024 Code Adoption Delayed</div>
+            <div class="alert-body">The SBCC unanimously voted Jan 23, 2026 to delay final adoption of 2024 WA Building Codes until <strong>August 21, 2026</strong>, with an effective date of May 3, 2027. Ongoing confusion over energy codes and I-2066 initiative — current 2021 codes remain in place. Public comment period for Group 1 &amp; 2 amendment petitions opens <strong>May 6, 2026</strong> — one week away.</div>
+            <div class="alert-meta">
+              <span>📋 ICC · ASHRAE · Energy</span>
+              <a href="https://sbcc.wa.gov" target="_blank" class="src-url">sbcc.wa.gov ↗</a>
+              <span>⚠ Monitor public comment May 6</span>
+            </div>
+          </div>
+
+          <div class="alert alert-red">
+            <div class="alert-title"><span class="flag">CRITICAL</span> Oregon — 2025 OSSC/OMSC Mandatory as of April 1, 2026</div>
+            <div class="alert-body">The 2025 Oregon Structural and Mechanical Specialty Codes became <strong>mandatory April 1, 2026</strong> — phase-in period ended. All new commercial permit applications must comply. Separately, Oregon's RMSB voted Feb 18, 2026 to require <strong>heat pumps instead of ducted AC</strong> in new residential construction as part of the 2026 ORSC energy code update.</div>
+            <div class="alert-meta">
+              <span>📋 ICC (IBC) · ASHRAE 90.1</span>
+              <a href="https://www.oregon.gov/bcd/codes-stand/Pages/code-adoption.aspx" target="_blank" class="src-url">oregon.gov/bcd ↗</a>
+            </div>
+          </div>
+
+          <div class="alert alert-red">
+            <div class="alert-title"><span class="flag">CRITICAL</span> California — 2025 Title 24 Codes Locked Until 2031</div>
+            <div class="alert-body">2025 CA Building Standards Code (CBC + Title 24) effective <strong>Jan 1, 2026</strong>. AB 130 locks this cycle — no state or local residential amendments for <strong>6 years through 2031</strong>. Key changes: WUI/wildfire code (Chapter 7A repealed), mandatory EV chargers, lithium-ion battery occupancy classification, mass timber expansion, and new NFPA 72 requirements for two-way comm systems.</div>
+            <div class="alert-meta">
+              <span>📋 ICC · NFPA 72 · CA Title 24</span>
+              <a href="https://www.dgs.ca.gov/BSC/News" target="_blank" class="src-url">dgs.ca.gov/BSC ↗</a>
+            </div>
+          </div>
+
+          <div class="alert alert-red">
+            <div class="alert-title"><span class="flag">CRITICAL</span> New York — 2025 Codes in Effect; Fossil Fuel Ban Suspended</div>
+            <div class="alert-body">2025 NYS Uniform Code + Energy Code (ASHRAE 90.1-2025) effective <strong>Dec 31, 2025</strong>, no transition period. However, fossil fuel prohibition provisions (19 NYCRR §1240.6) <strong>suspended by court order</strong> — not enforceable. Next Code Council meeting: <strong>Sept 22, 2026</strong>. NYC adopted its own 2025 NYCECC effective <strong>March 30, 2026</strong>.</div>
+            <div class="alert-meta">
+              <span>📋 ICC · ASHRAE 90.1-2025 · NFPA</span>
+              <a href="https://dos.ny.gov/notice-adoption" target="_blank" class="src-url">dos.ny.gov/notice-adoption ↗</a>
+              <span>⚠ Monitor court case on fossil fuel ban</span>
+            </div>
+          </div>
+
+          <div class="alert alert-yellow">
+            <div class="alert-title"><span class="flag flag-y">NOTABLE</span> 2026 NEC Published — State Adoption Cycle Begins</div>
+            <div class="alert-body">The 2026 National Electrical Code (NFPA 70) has been released. Major changes include: arc flash labeling now required for <strong>all non-residential service/feeder equipment</strong> (1,000A threshold removed); GFCI protection expanded to 60A outdoor circuits; EV charger receptacles (30A/50A/60A) must be EVSE-listed; dwelling load calc reduced from 3VA to 2VA/sq ft; HVAC GFCI compliance required by <strong>Sept 1, 2026</strong>. Minnesota already formed a 2026 NEC review committee.</div>
+            <div class="alert-meta">
+              <span>📋 NEC / NFPA 70</span>
+              <a href="https://www.nfpa.org/codes-and-standards/nfpa-70-standard-for-electrical" target="_blank" class="src-url">nfpa.org — NFPA 70 ↗</a>
+              <a href="https://www.dli.mn.gov/about-department/boards-and-councils/nec-2026-adoption-review-committee" target="_blank" class="src-url">MN NEC review committee ↗</a>
+            </div>
+          </div>
+
+          <div class="alert alert-yellow">
+            <div class="alert-title"><span class="flag flag-y">NOTABLE</span> Connecticut — 2026 Code Suite in Final Adoption (Based on 2024 IBC)</div>
+            <div class="alert-body">The 2026 CT State Building Code (IBC, IRC, IFC, NFPA 1 &amp; 101, 2020 NEC) is in <strong>final stages of adoption as of April 2026</strong> and expected to take effect <strong>mid-2026</strong>. CT is a uniform code state — local jurisdictions cannot amend. Codes &amp; Standards Committee meets 2nd Wednesday monthly via Teams.</div>
+            <div class="alert-meta">
+              <span>📋 ICC · NFPA 1 · NFPA 101 · NEC</span>
+              <a href="https://portal.ct.gov/DAS/Office-of-State-Building-Inspector/Building-and-Fire-Code-Adoption-Process" target="_blank" class="src-url">portal.ct.gov/DAS ↗</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MEETINGS PANEL -->
+      <div class="panel" id="panel-meetings">
+        <div class="card">
+          <div class="card-title">📅 Upcoming Meetings & Deadlines</div>
+          <table class="meetings-table">
+            <tr><th>Date</th><th>State</th><th>Body</th><th>Type</th><th>Link</th></tr>
+            <tr><td class="date-imminent">May 6, 2026</td><td>WA</td><td>SBCC — public comment opens (Group 1 &amp; 2 petitions)</td><td><span class="badge b-icc">ICC</span></td><td><a href="https://sbcc.wa.gov" target="_blank">sbcc.wa.gov ↗</a></td></tr>
+            <tr><td>May 2026 (2nd Wed)</td><td>CT</td><td>Codes &amp; Standards Committee (via Teams)</td><td><span class="badge b-multi">ICC/NFPA</span></td><td><a href="https://portal.ct.gov/das/the-codes-and-standards-committee" target="_blank">portal.ct.gov ↗</a></td></tr>
+            <tr><td>May 2026</td><td>FL</td><td>Florida Building Commission next cycle</td><td><span class="badge b-icc">ICC</span></td><td><a href="https://floridabuilding.org/c/default.aspx" target="_blank">floridabuilding.org ↗</a></td></tr>
+            <tr><td>May 2026</td><td>VA</td><td>SBCTRB — next meeting after April 17</td><td><span class="badge b-icc">ICC</span></td><td><a href="https://www.dhcd.virginia.gov/state-building-code-technical-review-board-sbctrb" target="_blank">dhcd.virginia.gov ↗</a></td></tr>
+            <tr><td>June 2026</td><td>OR</td><td>BCD — 2026 ORSC code review committee applications open</td><td><span class="badge b-icc">IRC</span></td><td><a href="https://www.oregon.gov/bcd/boards/Pages/rmsb.aspx" target="_blank">oregon.gov/bcd ↗</a></td></tr>
+            <tr><td>Jul 1, 2026</td><td>CO</td><td>Wildfire Resiliency Code — local govt adoption deadline</td><td><span class="badge b-icc">IBC</span></td><td><a href="https://energyoffice.colorado.gov/climate-energy/energy-policy/building-energy-codes/energy-code-board" target="_blank">energyoffice.co.gov ↗</a></td></tr>
+            <tr><td>Jul – Aug 2026</td><td>OR</td><td>BCD — public code amendment proposal period for 2026 ORSC</td><td><span class="badge b-icc">IRC</span></td><td><a href="https://www.oregon.gov/bcd/codes-stand/Pages/code-adoption.aspx" target="_blank">oregon.gov/bcd ↗</a></td></tr>
+            <tr><td>Sep 1, 2026</td><td>All</td><td>NEC 2026 — HVAC GFCI protection becomes mandatory (grace period ends)</td><td><span class="badge b-nec">NEC</span></td><td><a href="https://www.nfpa.org/codes-and-standards/nfpa-70-standard-for-electrical" target="_blank">nfpa.org ↗</a></td></tr>
+            <tr><td>Sep 22, 2026</td><td>NY</td><td>State Fire Prevention &amp; Building Code Council</td><td><span class="badge b-multi">ICC/ASHRAE</span></td><td><a href="https://dos.ny.gov/state-fire-prevention-and-building-code-council" target="_blank">dos.ny.gov ↗</a></td></tr>
+            <tr><td>Aug 21, 2026</td><td>WA</td><td>SBCC — Final adoption vote on 2024 codes</td><td><span class="badge b-icc">ICC</span></td><td><a href="https://sbcc.wa.gov" target="_blank">sbcc.wa.gov ↗</a></td></tr>
+            <tr><td>Dec 31, 2026</td><td>DC</td><td>Net-Zero Code adoption deadline</td><td><span class="badge b-ashrae">ASHRAE</span></td><td><a href="https://www.open-dc.gov/public-bodies/construction-codes-coordinating-board" target="_blank">open-dc.gov ↗</a></td></tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- NATIONAL SOURCES -->
+      <div class="panel" id="panel-national">
+        <div class="card">
+          <div class="card-title">ICC — International Code Council</div>
+          <div class="source-row"><span class="badge b-icc">ICC</span><div class="src-info"><div class="src-name">ICC News & Announcements</div><div class="src-desc">Official news on code development, hearings, adoptions</div><a href="https://www.iccsafe.org/news-announcements/news-announcements/" target="_blank" class="src-url">iccsafe.org/news-announcements ↗</a></div></div>
+          <div class="source-row"><span class="badge b-icc">ICC</span><div class="src-info"><div class="src-name">ICC State Adoption Map (all I-Codes)</div><div class="src-desc">IBC · IRC · IFC · IMC · IPC · IECC · IEBC · IWUIC adoption by state</div><a href="https://www.iccsafe.org/adoptions/code-adoption-map/IBC" target="_blank" class="src-url">iccsafe.org/adoptions ↗</a></div></div>
+          <div class="source-row"><span class="badge b-icc">ICC</span><div class="src-info"><div class="src-name">ICC Code Development (public comment, hearings)</div><div class="src-desc">Upcoming hearings, public comment periods, code change proposals</div><a href="https://www.iccsafe.org/codes-tech-support/codes/code-development/" target="_blank" class="src-url">iccsafe.org/code-development ↗</a></div></div>
+          <div class="source-row"><span class="badge b-icc">DOE</span><div class="src-info"><div class="src-name">energycodes.gov — DOE Building Energy Codes Program</div><div class="src-desc">IECC/ASHRAE 90.1 state adoption status; federal determinations</div><a href="https://www.energycodes.gov/status" target="_blank" class="src-url">energycodes.gov/status ↗</a></div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">NFPA — National Fire Protection Association</div>
+          <div class="source-row"><span class="badge b-nfpa">NFPA</span><div class="src-info"><div class="src-name">NFPA CodeFinder — adoption by standard & jurisdiction</div><div class="src-desc">Interactive map: NFPA 1, 13, 70/NEC, 72, 99, 101 by state</div><a href="https://codefinder.nfpa.org" target="_blank" class="src-url">codefinder.nfpa.org ↗</a></div></div>
+          <div class="source-row"><span class="badge b-nfpa">NFPA</span><div class="src-info"><div class="src-name">NFPA News & Updates</div><div class="src-desc">Standard revisions, adoptions, public comment announcements</div><a href="https://www.nfpa.org/news-blogs-and-articles" target="_blank" class="src-url">nfpa.org/news ↗</a></div></div>
+          <div class="source-row"><span class="badge b-nec">NEC</span><div class="src-info"><div class="src-name">NFPA 70 — NEC State Adoption Tracker (2026 cycle)</div><div class="src-desc">2026 NEC published; states beginning adoption review</div><a href="https://www.nfpa.org/codes-and-standards/nfpa-70-standard-for-electrical" target="_blank" class="src-url">nfpa.org/nfpa-70 ↗</a></div></div>
+          <div class="source-row"><span class="badge b-nfpa">NFPA</span><div class="src-info"><div class="src-name">NFPA Standards Development — Public Input / Comment</div><div class="src-desc">Open public input periods for all NFPA standards</div><a href="https://www.nfpa.org/standards/for-professionals/standards-development" target="_blank" class="src-url">nfpa.org/standards-development ↗</a></div></div>
+          <div class="source-row"><span class="badge b-nfpa">NFPA</span><div class="src-info"><div class="src-name">NFPA Jurisdictional Changes (state NEC editions)</div><div class="src-desc">State-specific NEC editions with local amendments</div><a href="https://www.nfpa.org/for-professionals/codes-and-standards/standards-development/nfpa-codes-and-standards-with-jurisdictional-changes" target="_blank" class="src-url">nfpa.org/jurisdictional-changes ↗</a></div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">ASHRAE</div>
+          <div class="source-row"><span class="badge b-ashrae">90.1</span><div class="src-info"><div class="src-name">ASHRAE Standard 90.1</div><div class="src-desc">Minimum energy efficiency standard for commercial buildings; basis for state energy codes</div><a href="https://www.ashrae.org/technical-resources/bookstore/standard-90-1" target="_blank" class="src-url">ashrae.org/standard-90-1 ↗</a></div></div>
+          <div class="source-row"><span class="badge b-ashrae">ASHRAE</span><div class="src-info"><div class="src-name">ASHRAE Standards Activities (public review, addenda)</div><div class="src-desc">Open public review for 90.1, 62.1, 55, 189.1</div><a href="https://www.ashrae.org/standards-research--technology/standards-activities" target="_blank" class="src-url">ashrae.org/standards-activities ↗</a></div></div>
+          <div class="source-row"><span class="badge b-ashrae">DOE</span><div class="src-info"><div class="src-name">DOE — ASHRAE 90.1 State Compliance Status</div><div class="src-desc">Which states comply with current commercial energy standard</div><a href="https://www.energycodes.gov/commercial" target="_blank" class="src-url">energycodes.gov/commercial ↗</a></div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Aggregator Trackers</div>
+          <div class="source-row"><span class="badge b-multi">Multi</span><div class="src-info"><div class="src-name">UpCodes — State Code Adoption Library</div><div class="src-desc">Effective dates and amendments for IBC, IRC, NFPA, NEC, ASHRAE per state</div><a href="https://up.codes/codes" target="_blank" class="src-url">up.codes/codes ↗</a></div></div>
+          <div class="source-row"><span class="badge b-multi">Multi</span><div class="src-info"><div class="src-name">Building Codes Assistance Project (BCAP)</div><div class="src-desc">IECC and ASHRAE 90.1 state energy code adoption progress</div><a href="https://bcapcodes.org" target="_blank" class="src-url">bcapcodes.org ↗</a></div></div>
+          <div class="source-row"><span class="badge b-multi">Multi</span><div class="src-info"><div class="src-name">IAEI — NEC Adoption & CEU by State</div><div class="src-desc">NEC adoption tracker; electrical inspection training</div><a href="https://www.iaei.org/page/nec-code-adoption" target="_blank" class="src-url">iaei.org/nec-adoption ↗</a></div></div>
+          <div class="source-row"><span class="badge b-multi">Multi</span><div class="src-info"><div class="src-name">CodeCheck — State Code Links (NEC, IRC, UPC)</div><div class="src-desc">Cross-references ICC, NFPA, and state agency pages</div><a href="https://codecheck.com/code-adoption-by-state/" target="_blank" class="src-url">codecheck.com/code-adoption-by-state ↗</a></div></div>
+          <div class="source-row"><span class="badge b-multi">Multi</span><div class="src-info"><div class="src-name">WDMA Code Resource Center</div><div class="src-desc">State adoption links for all ICC codes and model code development activity</div><a href="https://www.wdma.com/the-code-resource-center" target="_blank" class="src-url">wdma.com/code-resource-center ↗</a></div></div>
+          <div class="source-row"><span class="badge b-multi">Multi</span><div class="src-info"><div class="src-name">NEEP — Building Energy Codes Roundup (NE / Mid-Atlantic)</div><div class="src-desc">Tracks IECC/ASHRAE adoption in CT, DC, DE, MA, MD, ME, NH, NJ, NY, RI, VT</div><a href="https://neep.org/building-energy-codes" target="_blank" class="src-url">neep.org/building-energy-codes ↗</a></div></div>
+        </div>
+      </div>
+
+      <!-- ICC PANEL -->
+      <div class="panel" id="panel-icc">
+        <div class="card">
+          <div class="card-title">ICC I-Code Suite — Key State Sources</div>
+          <div class="source-row"><span class="badge b-icc">CA</span><div class="src-info"><div class="src-name">CA Building Standards Commission (DGS/BSC)</div><div class="src-desc">2025 CBC effective Jan 1, 2026; locked via AB 130 through 2031</div><a href="https://www.dgs.ca.gov/BSC/News" target="_blank" class="src-url">dgs.ca.gov/BSC/News ↗</a></div></div>
+          <div class="source-row"><span class="badge b-icc">NY</span><div class="src-info"><div class="src-name">NY State Fire Prevention & Building Code Council</div><div class="src-desc">2025 NY Uniform Code effective Dec 31, 2025; next meeting Sept 22, 2026</div><a href="https://dos.ny.gov/state-fire-prevention-and-building-code-council" target="_blank" class="src-url">dos.ny.gov ↗</a></div></div>
+          <div class="source-row"><span class="badge b-icc">CT</span><div class="src-info"><div class="src-name">CT Codes & Standards Committee + Code Amendment Subcommittee</div><div class="src-desc">2026 CT codes (IBC, IRC, IFC, NFPA 1 & 101) expected mid-2026 — final stages</div><a href="https://portal.ct.gov/DAS/Office-of-State-Building-Inspector/Building-and-Fire-Code-Adoption-Process" target="_blank" class="src-url">portal.ct.gov/DAS ↗</a></div></div>
+          <div class="source-row"><span class="badge b-icc">FL</span><div class="src-info"><div class="src-name">Florida Building Commission / BCAI Board</div><div class="src-desc">Florida Building Code; board meetings monthly</div><a href="https://floridabuilding.org/c/default.aspx" target="_blank" class="src-url">floridabuilding.org ↗</a></div></div>
+          <div class="source-row"><span class="badge b-icc">WA</span><div class="src-info"><div class="src-name">WA State Building Code Council (SBCC)</div><div class="src-desc">2024 WA codes delayed — final adoption Aug 21, 2026; effective May 3, 2027</div><a href="https://sbcc.wa.gov" target="_blank" class="src-url">sbcc.wa.gov ↗</a></div></div>
+          <div class="source-row"><span class="badge b-icc">OR</span><div class="src-info"><div class="src-name">OR Building Codes Division (BCD)</div><div class="src-desc">2025 OSSC mandatory April 1, 2026; 2026 ORSC under development</div><a href="https://www.oregon.gov/bcd/codes-stand/Pages/code-adoption.aspx" target="_blank" class="src-url">oregon.gov/bcd ↗</a></div></div>
+          <div class="source-row"><span class="badge b-icc">NC</span><div class="src-info"><div class="src-name">NC Office of State Fire Marshal — Building Code Council</div><div class="src-desc">2024 NC codes (10-code suite) effective July 1, 2025</div><a href="https://www.ncosfm.gov/codes/building-code-council-bcc/bcc-meeting-dates" target="_blank" class="src-url">ncosfm.gov/bcc ↗</a></div></div>
+          <div class="source-row"><span class="badge b-icc">VA</span><div class="src-info"><div class="src-name">VA DHCD — State Building Code Technical Review Board</div><div class="src-desc">April 17, 2026 meeting packet posted</div><a href="https://www.dhcd.virginia.gov/state-building-code-technical-review-board-sbctrb" target="_blank" class="src-url">dhcd.virginia.gov ↗</a></div></div>
+          <div class="source-row"><span class="badge b-icc">CO</span><div class="src-info"><div class="src-name">CO Wildfire Resiliency Code Board + Energy Code Board</div><div class="src-desc">Local govts must adopt wildfire codes by July 1, 2026; 2024 IECC required after July 1, 2026</div><a href="https://energyoffice.colorado.gov/climate-energy/energy-policy/building-energy-codes/energy-code-board" target="_blank" class="src-url">energyoffice.colorado.gov ↗</a></div></div>
+          <div class="source-row"><span class="badge b-icc">MN</span><div class="src-info"><div class="src-name">MN DLI — Construction Codes Advisory Council</div><div class="src-desc">State building code oversight and meeting notices</div><a href="https://www.dli.mn.gov/about-department/boards-and-councils/construction-codes-advisory-council" target="_blank" class="src-url">dli.mn.gov ↗</a></div></div>
+          <div class="source-row"><span class="badge b-icc">GA</span><div class="src-info"><div class="src-name">GA DCA — Construction Codes</div><div class="src-desc">Monitor for 2024 IBC adoption action</div><a href="https://www.dca.ga.gov/local-government-assistance/construction-codes-industrialized-buildings/construction-codes" target="_blank" class="src-url">dca.ga.gov ↗</a></div></div>
+          <div class="source-row"><span class="badge b-icc">TX</span><div class="src-info"><div class="src-name">TX SECO — State Energy Conservation Office</div><div class="src-desc">Energy code compliance for commercial buildings</div><a href="https://comptroller.texas.gov/programs/seco/" target="_blank" class="src-url">comptroller.texas.gov/seco ↗</a></div></div>
+        </div>
+      </div>
+
+      <!-- NFPA / NEC PANEL -->
+      <div class="panel" id="panel-nfpa">
+        <div class="card">
+          <div class="card-title">NFPA & NEC — State Sources</div>
+          <div class="source-row"><span class="badge b-nec">NEC / MN</span><div class="src-info"><div class="src-name">Minnesota — 2026 NEC Adoption Review Committee</div><div class="src-desc">MN DLI formed committee to review 2026 NEC and recommend amendments to Board of Electricity</div><a href="https://www.dli.mn.gov/about-department/boards-and-councils/nec-2026-adoption-review-committee" target="_blank" class="src-url">dli.mn.gov/nec-2026 ↗</a></div></div>
+          <div class="source-row"><span class="badge b-nec">NEC / OR</span><div class="src-info"><div class="src-name">Oregon — Electrical Specialty Code</div><div class="src-desc">2023 OESC effective; monitor for 2026 NEC cycle action</div><a href="https://www.oregon.gov/bcd/boards/Pages/elec-elev.aspx" target="_blank" class="src-url">oregon.gov/bcd/boards/elec ↗</a></div></div>
+          <div class="source-row"><span class="badge b-nec">NEC / WA</span><div class="src-info"><div class="src-name">WA Dept of Labor & Industries — Electrical Rules</div><div class="src-desc">WA adopts NEC separately from SBCC; monitor for 2026 NEC cycle</div><a href="https://lni.wa.gov/licensing-permits/electrical/rules-laws" target="_blank" class="src-url">lni.wa.gov/electrical ↗</a></div></div>
+          <div class="source-row"><span class="badge b-nec">NEC / TX</span><div class="src-info"><div class="src-name">TX TDLR — Electrical Safety Division</div><div class="src-desc">Texas statewide NEC adoption for commercial buildings</div><a href="https://www.tdlr.texas.gov/electrical/electrical.htm" target="_blank" class="src-url">tdlr.texas.gov/electrical ↗</a></div></div>
+          <div class="source-row"><span class="badge b-nec">NEC / IN</span><div class="src-info"><div class="src-name">Indiana — Electrical Code Update Committee</div><div class="src-desc">IN updating from older NEC cycle; committee review ongoing</div><a href="https://www.in.gov/dhs/boards-and-commissions/indiana-electrical-code-update-committee/" target="_blank" class="src-url">in.gov/dhs/electrical-code ↗</a></div></div>
+          <div class="source-row"><span class="badge b-nec">NEC / HI</span><div class="src-info"><div class="src-name">Hawaii — Board of Electricians</div><div class="src-desc">HI NEC adoption and board meeting schedule</div><a href="https://cca.hawaii.gov/pvl/boards/electrician/board-meeting-schedule/" target="_blank" class="src-url">cca.hawaii.gov ↗</a></div></div>
+          <div class="source-row"><span class="badge b-nfpa">NFPA / CT</span><div class="src-info"><div class="src-name">CT — NFPA 1 & 101 (part of 2026 code cycle)</div><div class="src-desc">CT adopts NFPA 1 and 101 alongside IBC; 2026 cycle in final adoption</div><a href="https://portal.ct.gov/DAS/Office-of-State-Fire-Marshal/Office-of-State-Fire-Marshal" target="_blank" class="src-url">portal.ct.gov — State Fire Marshal ↗</a></div></div>
+          <div class="source-row"><span class="badge b-nfpa">NFPA / DE</span><div class="src-info"><div class="src-name">Delaware — State Fire Marshal Public Meeting Notices</div><div class="src-desc">DE NFPA standards adoption via State Fire Marshal rulemaking</div><a href="https://statefiremarshal.delaware.gov/public-meeting-notice/" target="_blank" class="src-url">statefiremarshal.delaware.gov ↗</a></div></div>
+          <div class="source-row"><span class="badge b-nfpa">NFPA / MA</span><div class="src-info"><div class="src-name">Massachusetts — Dept of Fire Services</div><div class="src-desc">MA fire code (NFPA-based) rulemaking and board events</div><a href="https://www.mass.gov/orgs/department-of-fire-services/events" target="_blank" class="src-url">mass.gov/dept-of-fire-services ↗</a></div></div>
+          <div class="source-row"><span class="badge b-nfpa">NFPA / AR</span><div class="src-info"><div class="src-name">Arkansas Fire Protection Association — Rules & Regs</div><div class="src-desc">AR fire code rulemaking; NFPA standard adoptions</div><a href="https://www.arfireprotection.org/rules_regs/index.html" target="_blank" class="src-url">arfireprotection.org ↗</a></div></div>
+          <div class="source-row"><span class="badge b-nfpa">NFPA / WV</span><div class="src-info"><div class="src-name">West Virginia Fire Commission Meetings</div><div class="src-desc">WV NFPA 1 and 101 adoption via Fire Commission</div><a href="https://firemarshal.wv.gov/firecommission/Pages/Meetings.aspx" target="_blank" class="src-url">firemarshal.wv.gov ↗</a></div></div>
+        </div>
+      </div>
+
+      <!-- ASHRAE PANEL -->
+      <div class="panel" id="panel-ashrae">
+        <div class="card">
+          <div class="card-title">ASHRAE / Energy Code — State Sources</div>
+          <div class="source-row"><span class="badge b-ashrae">DOE / All</span><div class="src-info"><div class="src-name">DOE energycodes.gov — State Status (master tracker)</div><div class="src-desc">Which states comply with 90.1-2022 / 2024 IECC; federal compliance deadlines</div><a href="https://www.energycodes.gov/status" target="_blank" class="src-url">energycodes.gov/status ↗</a></div></div>
+          <div class="source-row"><span class="badge b-ashrae">IECC / RI</span><div class="src-info"><div class="src-name">Rhode Island — Energy Code (first 2024 IECC state)</div><div class="src-desc">RI first state with 2024 IECC; effective Dec 1, 2025 with electric-ready provisions</div><a href="https://rieermc.ri.gov/meetings-materials/" target="_blank" class="src-url">rieermc.ri.gov ↗</a></div></div>
+          <div class="source-row"><span class="badge b-ashrae">90.1 / NY</span><div class="src-info"><div class="src-name">New York — Energy Conservation Construction Code</div><div class="src-desc">NYS ASHRAE 90.1-2025 effective Dec 31, 2025; NYC 2025 NYCECC effective Mar 30, 2026</div><a href="https://dos.ny.gov/notice-adoption" target="_blank" class="src-url">dos.ny.gov/notice-adoption ↗</a></div></div>
+          <div class="source-row"><span class="badge b-ashrae">IECC / MA</span><div class="src-info"><div class="src-name">Massachusetts — BBRS (stretch code + IECC)</div><div class="src-desc">MA stretch code includes IECC + electric ready; BBRS meetings monthly</div><a href="https://www.mass.gov/orgs/board-of-building-regulation-and-standards" target="_blank" class="src-url">mass.gov/BBRS ↗</a></div></div>
+          <div class="source-row"><span class="badge b-ashrae">90.1 / OR</span><div class="src-info"><div class="src-name">Oregon — OEESC (based on ASHRAE 90.1-2022)</div><div class="src-desc">2025 OEESC effective Jan 1, 2025 / mandatory Jul 2025; heat pump mandate in residential</div><a href="https://www.oregon.gov/bcd/codes-stand/pages/oeesc-adoption.aspx" target="_blank" class="src-url">oregon.gov/bcd/oeesc ↗</a></div></div>
+          <div class="source-row"><span class="badge b-ashrae">IECC / CO</span><div class="src-info"><div class="src-name">Colorado — Energy Code Board / Model Low Energy Code</div><div class="src-desc">2024 IECC-based code required for local govts updating codes after July 1, 2026</div><a href="https://energyoffice.colorado.gov/climate-energy/energy-policy/building-energy-codes/energy-code-board" target="_blank" class="src-url">energyoffice.colorado.gov ↗</a></div></div>
+          <div class="source-row"><span class="badge b-ashrae">Title 24 / CA</span><div class="src-info"><div class="src-name">California — Title 24 Part 6 (Energy Code)</div><div class="src-desc">2025 CA energy code effective Jan 1, 2026; locked through 2031 per AB 130</div><a href="https://www.energy.ca.gov/rules-and-regulations/building-energy-efficiency" target="_blank" class="src-url">energy.ca.gov/building-energy-efficiency ↗</a></div></div>
+          <div class="source-row"><span class="badge b-ashrae">NZC / DC</span><div class="src-info"><div class="src-name">DC — Net-Zero Code target Dec 31, 2026</div><div class="src-desc">DC CCCB tracking progress toward Net-Zero Code adoption deadline</div><a href="https://www.open-dc.gov/public-bodies/construction-codes-coordinating-board" target="_blank" class="src-url">open-dc.gov/CCCB ↗</a></div></div>
+          <div class="source-row"><span class="badge b-ashrae">IECC / NJ</span><div class="src-info"><div class="src-name">New Jersey — DCA Energy Code (reviewing 2024 IECC)</div><div class="src-desc">NJ among states reviewing 2024 IECC; monitor proposed rule notices</div><a href="http://www.nj.gov/dca/divisions/codes/codreg/rule_proposals_adoptions.html" target="_blank" class="src-url">nj.gov/dca/codes ↗</a></div></div>
+          <div class="source-row"><span class="badge b-ashrae">IECC / VT</span><div class="src-info"><div class="src-name">Vermont — Building Energy Standards</div><div class="src-desc">VT stretch code includes ASHRAE 90.1 and electric ready provisions</div><a href="https://publicservice.vermont.gov/content/building-energy-standards-update" target="_blank" class="src-url">publicservice.vermont.gov ↗</a></div></div>
+        </div>
+      </div>
+
+      <!-- STATE SITES PANEL -->
+      <div class="panel" id="panel-states">
+        <div class="card">
+          <div class="card-title">All 157 Original State Tracking Sites</div>
+          <table class="state-table">
+            <tr><th>State</th><th>Site / Body</th><th>Type</th><th>URL</th></tr>
+            <tr><td class="state-name">AL</td><td>ADECA Energy Codes</td><td><span class="badge b-icc">IBC/IRC</span></td><td class="state-url"><a href="https://adeca.alabama.gov/Divisions/energy/energycodes/Pages/default.aspx" target="_blank">adeca.alabama.gov ↗</a></td></tr>
+            <tr><td class="state-name">AL</td><td>AERC Board Meeting Minutes</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://adeca.alabama.gov/aerc-board-meeting-minutes/" target="_blank">adeca.alabama.gov ↗</a></td></tr>
+            <tr><td class="state-name">AL</td><td>AL Open Meetings</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www.openmeetings.alabama.gov/generalpublic/display_notices.aspx" target="_blank">openmeetings.alabama.gov ↗</a></td></tr>
+            <tr><td class="state-name">AL</td><td>Plumbers & Gas Fitters Board</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://pgfb.alabama.gov/about/meetings/" target="_blank">pgfb.alabama.gov ↗</a></td></tr>
+            <tr><td class="state-name">AR</td><td>ADEQ Building Energy</td><td><span class="badge b-ashrae">Energy</span></td><td class="state-url"><a href="https://www.adeq.state.ar.us/energy/initiatives/building.aspx" target="_blank">adeq.state.ar.us ↗</a></td></tr>
+            <tr><td class="state-name">AR</td><td>AR Healthy — Plumbing Examiners</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www.healthy.arkansas.gov/programs-services/topics/plumbing-examiners-committee1" target="_blank">healthy.arkansas.gov ↗</a></td></tr>
+            <tr><td class="state-name">AR</td><td>AR Fire Protection — News/Events</td><td><span class="badge b-nfpa">NFPA</span></td><td class="state-url"><a href="https://www.arfireprotection.org/news_events/index.html" target="_blank">arfireprotection.org ↗</a></td></tr>
+            <tr><td class="state-name">AR</td><td>AR Fire Protection — Rules & Regs</td><td><span class="badge b-nfpa">NFPA</span></td><td class="state-url"><a href="https://www.arfireprotection.org/rules_regs/index.html" target="_blank">arfireprotection.org ↗</a></td></tr>
+            <tr><td class="state-name">AZ</td><td>AZ Housing — Manufactured Housing</td><td><span class="badge b-icc">IBC</span></td><td class="state-url"><a href="https://housing.az.gov/manufactured-housing" target="_blank">housing.az.gov ↗</a></td></tr>
+            <tr><td class="state-name">CA</td><td>DGS Building Standards Commission News</td><td><span class="badge b-icc">IBC</span></td><td class="state-url"><a href="https://www.dgs.ca.gov/BSC/News" target="_blank">dgs.ca.gov/BSC ↗</a></td></tr>
+            <tr><td class="state-name">CA</td><td>DGS BSC Calendars</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www.dgs.ca.gov/BSC/Calendars" target="_blank">dgs.ca.gov/BSC/Calendars ↗</a></td></tr>
+            <tr><td class="state-name">CA</td><td>CA Energy Commission — Building Energy Efficiency</td><td><span class="badge b-ashrae">Energy</span></td><td class="state-url"><a href="https://www.energy.ca.gov/rules-and-regulations/building-energy-efficiency" target="_blank">energy.ca.gov ↗</a></td></tr>
+            <tr><td class="state-name">CA</td><td>CEC Business Meetings</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www.energy.ca.gov/proceedings/business-meetings" target="_blank">energy.ca.gov ↗</a></td></tr>
+            <tr><td class="state-name">CO</td><td>DPO Electrical Board</td><td><span class="badge b-nec">NEC</span></td><td class="state-url"><a href="https://dpo.colorado.gov/Electrical" target="_blank">dpo.colorado.gov ↗</a></td></tr>
+            <tr><td class="state-name">CO</td><td>DPO Plumbing Board</td><td><span class="badge b-icc">IPC</span></td><td class="state-url"><a href="https://dpo.colorado.gov/Plumbing" target="_blank">dpo.colorado.gov ↗</a></td></tr>
+            <tr><td class="state-name">CO</td><td>Energy Code Board</td><td><span class="badge b-ashrae">IECC</span></td><td class="state-url"><a href="https://energyoffice.colorado.gov/climate-energy/energy-policy/building-energy-codes/energy-code-board" target="_blank">energyoffice.colorado.gov ↗</a></td></tr>
+            <tr><td class="state-name">CT</td><td>Codes & Standards Committee</td><td><span class="badge b-multi">ICC/NFPA</span></td><td class="state-url"><a href="https://portal.ct.gov/das/the-codes-and-standards-committee" target="_blank">portal.ct.gov ↗</a></td></tr>
+            <tr><td class="state-name">CT</td><td>Code Amendment Subcommittee — Agendas</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://portal.ct.gov/DAS/Office-of-State-Building-Inspector/Code-Amendment-Subcommittee/Meeting-Agendas" target="_blank">portal.ct.gov ↗</a></td></tr>
+            <tr><td class="state-name">CT</td><td>Building & Fire Code Adoption Process</td><td><span class="badge b-multi">ICC/NFPA</span></td><td class="state-url"><a href="https://portal.ct.gov/DAS/Office-of-State-Building-Inspector/Building-and-Fire-Code-Adoption-Process" target="_blank">portal.ct.gov ↗</a></td></tr>
+            <tr><td class="state-name">CT</td><td>State Fire Marshal</td><td><span class="badge b-nfpa">NFPA</span></td><td class="state-url"><a href="https://portal.ct.gov/DAS/Office-of-State-Fire-Marshal/Office-of-State-Fire-Marshal" target="_blank">portal.ct.gov ↗</a></td></tr>
+            <tr><td class="state-name">DC</td><td>DCRA — CCCB Meeting Information</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://dcra.dc.gov/page/cccb-meeting-information" target="_blank">dcra.dc.gov ↗</a></td></tr>
+            <tr><td class="state-name">DC</td><td>Open DC — Construction Codes Coordinating Board</td><td><span class="badge b-multi">ICC</span></td><td class="state-url"><a href="https://www.open-dc.gov/public-bodies/construction-codes-coordinating-board" target="_blank">open-dc.gov ↗</a></td></tr>
+            <tr><td class="state-name">DE</td><td>State Fire Marshal — Public Meeting Notices</td><td><span class="badge b-nfpa">NFPA</span></td><td class="state-url"><a href="https://statefiremarshal.delaware.gov/public-meeting-notice/" target="_blank">statefiremarshal.delaware.gov ↗</a></td></tr>
+            <tr><td class="state-name">DE</td><td>State Fire Commission — Public Meetings</td><td><span class="badge b-nfpa">NFPA</span></td><td class="state-url"><a href="https://statefirecommission.delaware.gov/public-meetings/" target="_blank">statefirecommission.delaware.gov ↗</a></td></tr>
+            <tr><td class="state-name">FL</td><td>Florida Building Commission</td><td><span class="badge b-icc">IBC</span></td><td class="state-url"><a href="https://floridabuilding.org/c/default.aspx" target="_blank">floridabuilding.org ↗</a></td></tr>
+            <tr><td class="state-name">FL</td><td>DBPR — Commission Agendas & Minutes</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="http://www.myfloridalicense.com/DBPR/building-codes-and-standards/commission-agendas-minutes/" target="_blank">myfloridalicense.com ↗</a></td></tr>
+            <tr><td class="state-name">FL</td><td>BCAI Board Meeting Information</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="http://www.myfloridalicense.com/DBPR/building-code-administrators-and-inspectors/board-meeting-information/" target="_blank">myfloridalicense.com ↗</a></td></tr>
+            <tr><td class="state-name">GA</td><td>DCA Construction Codes</td><td><span class="badge b-icc">IBC</span></td><td class="state-url"><a href="https://www.dca.ga.gov/local-government-assistance/construction-codes-industrialized-buildings/construction-codes" target="_blank">dca.ga.gov ↗</a></td></tr>
+            <tr><td class="state-name">HI</td><td>BCC Meeting Agendas</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://ags.hawaii.gov/bcc/meeting-agendas/" target="_blank">ags.hawaii.gov ↗</a></td></tr>
+            <tr><td class="state-name">HI</td><td>Board of Electricians — Meeting Schedule</td><td><span class="badge b-nec">NEC</span></td><td class="state-url"><a href="https://cca.hawaii.gov/pvl/boards/electrician/board-meeting-schedule/" target="_blank">cca.hawaii.gov ↗</a></td></tr>
+            <tr><td class="state-name">IA</td><td>IDPH — Plumbing & Mechanical Code Committee</td><td><span class="badge b-icc">IPC/IMC</span></td><td class="state-url"><a href="https://idph.iowa.gov/pmsb/code-committee" target="_blank">idph.iowa.gov ↗</a></td></tr>
+            <tr><td class="state-name">ID</td><td>DBS — Idaho Building Code Board</td><td><span class="badge b-icc">IBC</span></td><td class="state-url"><a href="https://dbs.idaho.gov/boards/idaho-building-code-board/" target="_blank">dbs.idaho.gov ↗</a></td></tr>
+            <tr><td class="state-name">ID</td><td>DBS — Plumbing Board</td><td><span class="badge b-icc">IPC</span></td><td class="state-url"><a href="https://dbs.idaho.gov/boards/idaho-plumbing-board/" target="_blank">dbs.idaho.gov ↗</a></td></tr>
+            <tr><td class="state-name">ID</td><td>DBS Newsroom</td><td><span class="badge b-state">News</span></td><td class="state-url"><a href="https://dbs.idaho.gov/newsroom/" target="_blank">dbs.idaho.gov ↗</a></td></tr>
+            <tr><td class="state-name">IL</td><td>CDB — Energy Conservation Act Council</td><td><span class="badge b-ashrae">Energy</span></td><td class="state-url"><a href="https://www2.illinois.gov/cdb/business/codes/ECACouncil/Pages/default.aspx" target="_blank">illinois.gov/cdb ↗</a></td></tr>
+            <tr><td class="state-name">IL</td><td>CDB Board Meetings</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www2.illinois.gov/cdb/about/boardmeetings/Pages/20212022Meetings.aspx" target="_blank">illinois.gov/cdb ↗</a></td></tr>
+            <tr><td class="state-name">IN</td><td>FPBSC Meeting Materials</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www.in.gov/dhs/boards-and-commissions/fire-prevention-and-building-safety-commission/fpbsc-meeting-materials/" target="_blank">in.gov/dhs ↗</a></td></tr>
+            <tr><td class="state-name">IN</td><td>IN Electrical Code Update Committee</td><td><span class="badge b-nec">NEC</span></td><td class="state-url"><a href="https://www.in.gov/dhs/boards-and-commissions/indiana-electrical-code-update-committee/" target="_blank">in.gov/dhs ↗</a></td></tr>
+            <tr><td class="state-name">LA</td><td>LA State Uniform Construction Code Council</td><td><span class="badge b-icc">IBC</span></td><td class="state-url"><a href="http://lsuccc.dps.louisiana.gov/" target="_blank">lsuccc.dps.louisiana.gov ↗</a></td></tr>
+            <tr><td class="state-name">MA</td><td>BBRS Events</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www.mass.gov/orgs/board-of-building-regulation-and-standards/events" target="_blank">mass.gov ↗</a></td></tr>
+            <tr><td class="state-name">MA</td><td>Dept of Fire Services Events</td><td><span class="badge b-nfpa">NFPA</span></td><td class="state-url"><a href="https://www.mass.gov/orgs/department-of-fire-services/events" target="_blank">mass.gov ↗</a></td></tr>
+            <tr><td class="state-name">MD</td><td>DLLR — Emergency Regulations</td><td><span class="badge b-state">Rulemaking</span></td><td class="state-url"><a href="http://www.dllr.state.md.us/regs/emer.shtml" target="_blank">dllr.state.md.us ↗</a></td></tr>
+            <tr><td class="state-name">ME</td><td>Fire Marshal — Building Codes Calendar</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www.maine.gov/dps/fmo/building-codes/calendar" target="_blank">maine.gov ↗</a></td></tr>
+            <tr><td class="state-name">ME</td><td>Technical Codes & Standards Board Minutes</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www.maine.gov/dps/fmo/building-codes/technical-codes-standards-board/minutes" target="_blank">maine.gov ↗</a></td></tr>
+            <tr><td class="state-name">MI</td><td>Climate & Energy — Building Energy Code</td><td><span class="badge b-ashrae">Energy</span></td><td class="state-url"><a href="https://www.michigan.gov/climateandenergy/0,4580,7-364-85453_85461-489614--,00.html" target="_blank">michigan.gov ↗</a></td></tr>
+            <tr><td class="state-name">MN</td><td>DLI — Construction Codes Advisory Council</td><td><span class="badge b-icc">IBC</span></td><td class="state-url"><a href="https://www.dli.mn.gov/about-department/boards-and-councils/construction-codes-advisory-council" target="_blank">dli.mn.gov ↗</a></td></tr>
+            <tr><td class="state-name">MN</td><td>DLI — Board of Electricity</td><td><span class="badge b-nec">NEC</span></td><td class="state-url"><a href="https://www.dli.mn.gov/about-department/boards-and-councils/board-electricity" target="_blank">dli.mn.gov ↗</a></td></tr>
+            <tr><td class="state-name">MN</td><td>DLI — Plumbing Board</td><td><span class="badge b-icc">IPC</span></td><td class="state-url"><a href="https://www.dli.mn.gov/about-department/boards-and-councils/plumbing-board" target="_blank">dli.mn.gov ↗</a></td></tr>
+            <tr><td class="state-name">MN</td><td>2026 NEC Adoption Review Committee</td><td><span class="badge b-nec">NEC</span></td><td class="state-url"><a href="https://www.dli.mn.gov/about-department/boards-and-councils/nec-2026-adoption-review-committee" target="_blank">dli.mn.gov ↗</a></td></tr>
+            <tr><td class="state-name">MT</td><td>BSD — Building Codes Meetings</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://bsd.dli.mt.gov/building-codes-permits/meetings" target="_blank">bsd.dli.mt.gov ↗</a></td></tr>
+            <tr><td class="state-name">MT</td><td>BSD — Plumbers Board</td><td><span class="badge b-icc">IPC</span></td><td class="state-url"><a href="https://boards.bsd.dli.mt.gov/plumbers/" target="_blank">boards.bsd.dli.mt.gov ↗</a></td></tr>
+            <tr><td class="state-name">NC</td><td>OSFM — BCC Meeting Dates</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www.ncosfm.gov/codes/building-code-council-bcc/bcc-meeting-dates" target="_blank">ncosfm.gov ↗</a></td></tr>
+            <tr><td class="state-name">NC</td><td>OSFM — BCC Hearing Notices</td><td><span class="badge b-state">Rulemaking</span></td><td class="state-url"><a href="https://www.ncosfm.gov/codes/building-code-council-bcc/bcc-hearing-notices" target="_blank">ncosfm.gov ↗</a></td></tr>
+            <tr><td class="state-name">ND</td><td>Commerce — Building Codes</td><td><span class="badge b-icc">IBC</span></td><td class="state-url"><a href="https://commerce.nd.gov/community-services/building-codes" target="_blank">commerce.nd.gov ↗</a></td></tr>
+            <tr><td class="state-name">NH</td><td>Building Code Review Board — Meetings</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www.nh.gov/safety/boardsandcommissions/bldgcode/meetings/index.html" target="_blank">nh.gov ↗</a></td></tr>
+            <tr><td class="state-name">NH</td><td>OPLC — Mechanical Safety & Licensing Board</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www.oplc.nh.gov/mechanical-safety-and-licensing-board-meeting-information" target="_blank">oplc.nh.gov ↗</a></td></tr>
+            <tr><td class="state-name">NH</td><td>PUC — Energy Efficiency (EESE)</td><td><span class="badge b-ashrae">Energy</span></td><td class="state-url"><a href="https://www.puc.nh.gov/eese.htm" target="_blank">puc.nh.gov ↗</a></td></tr>
+            <tr><td class="state-name">NJ</td><td>DCA — Rule Proposals & Adoptions</td><td><span class="badge b-icc">IBC</span></td><td class="state-url"><a href="http://www.nj.gov/dca/divisions/codes/codreg/rule_proposals_adoptions.html" target="_blank">nj.gov/dca ↗</a></td></tr>
+            <tr><td class="state-name">NM</td><td>RLD — Construction Industries (Building Codes)</td><td><span class="badge b-icc">IBC</span></td><td class="state-url"><a href="https://www.rld.nm.gov/construction-industries/find-a-bureau/bureaus/rules-laws-and-building-codes/" target="_blank">rld.nm.gov ↗</a></td></tr>
+            <tr><td class="state-name">NV</td><td>Energy Commission — NECC</td><td><span class="badge b-ashrae">IECC</span></td><td class="state-url"><a href="https://energy.nv.gov/Programs/Building_Energy_Codes/NECC/" target="_blank">energy.nv.gov ↗</a></td></tr>
+            <tr><td class="state-name">NY</td><td>DOS — Notice of Adoption</td><td><span class="badge b-icc">IBC</span></td><td class="state-url"><a href="http://www.dos.ny.gov/dcea/noticadopt.html" target="_blank">dos.ny.gov ↗</a></td></tr>
+            <tr><td class="state-name">NY</td><td>State Fire Prevention & Building Code Council</td><td><span class="badge b-multi">ICC/ASHRAE</span></td><td class="state-url"><a href="https://dos.ny.gov/state-fire-prevention-and-building-code-council" target="_blank">dos.ny.gov ↗</a></td></tr>
+            <tr><td class="state-name">OH</td><td>MuniCode — Ohio Building Code Meetings</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://meetings.municode.com/PublishPage/index?cid=OHIODOC" target="_blank">meetings.municode.com ↗</a></td></tr>
+            <tr><td class="state-name">OK</td><td>OUBCC — Meeting Agendas & Minutes</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www.ok.gov/oubcc/Meetings_&_Events/Commission_Meeting_Agendas_and_Minutes/index.html" target="_blank">ok.gov/oubcc ↗</a></td></tr>
+            <tr><td class="state-name">OK</td><td>OUBCC — Proposed Rules</td><td><span class="badge b-state">Rulemaking</span></td><td class="state-url"><a href="https://www.ok.gov/oubcc/Codes_&_Rules/Proposed_Rules/index.html" target="_blank">ok.gov/oubcc ↗</a></td></tr>
+            <tr><td class="state-name">OR</td><td>BCD — Code Adoption</td><td><span class="badge b-icc">IBC</span></td><td class="state-url"><a href="https://www.oregon.gov/bcd/codes-stand/Pages/code-adoption.aspx" target="_blank">oregon.gov/bcd ↗</a></td></tr>
+            <tr><td class="state-name">OR</td><td>BCD — Calendar of Meetings</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www.oregon.gov/bcd/Pages/calendar-of-meetings.aspx" target="_blank">oregon.gov/bcd ↗</a></td></tr>
+            <tr><td class="state-name">OR</td><td>BCD — Proposed Rules</td><td><span class="badge b-state">Rulemaking</span></td><td class="state-url"><a href="https://www.oregon.gov/bcd/laws-rules/Pages/proposed-rules.aspx" target="_blank">oregon.gov/bcd ↗</a></td></tr>
+            <tr><td class="state-name">OR</td><td>OEESC Adoption (ASHRAE 90.1)</td><td><span class="badge b-ashrae">90.1</span></td><td class="state-url"><a href="https://www.oregon.gov/bcd/codes-stand/pages/oeesc-adoption.aspx" target="_blank">oregon.gov/bcd ↗</a></td></tr>
+            <tr><td class="state-name">OR</td><td>RMSB — Residential & Manufactured Structures Board</td><td><span class="badge b-icc">IRC</span></td><td class="state-url"><a href="https://www.oregon.gov/bcd/boards/Pages/rmsb.aspx" target="_blank">oregon.gov/bcd ↗</a></td></tr>
+            <tr><td class="state-name">OR</td><td>Plumbing Board</td><td><span class="badge b-icc">IPC</span></td><td class="state-url"><a href="https://www.oregon.gov/bcd/boards/Pages/plumbing.aspx" target="_blank">oregon.gov/bcd ↗</a></td></tr>
+            <tr><td class="state-name">OR</td><td>Mechanical Board</td><td><span class="badge b-icc">IMC</span></td><td class="state-url"><a href="https://www.oregon.gov/bcd/boards/Pages/mechanical.aspx" target="_blank">oregon.gov/bcd ↗</a></td></tr>
+            <tr><td class="state-name">PA</td><td>DLI — UCC Review & Advisory Council</td><td><span class="badge b-icc">IBC</span></td><td class="state-url"><a href="https://www.dli.pa.gov/ucc/Pages/UCC-Review-and-Advisory-Council.aspx" target="_blank">dli.pa.gov ↗</a></td></tr>
+            <tr><td class="state-name">RI</td><td>RIBCC Committee Meetings</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="http://www.ribcc.ri.gov/committee/meetings/" target="_blank">ribcc.ri.gov ↗</a></td></tr>
+            <tr><td class="state-name">RI</td><td>RI Energy Efficiency & Resources Management Council</td><td><span class="badge b-ashrae">IECC</span></td><td class="state-url"><a href="https://rieermc.ri.gov/meetings-materials/" target="_blank">rieermc.ri.gov ↗</a></td></tr>
+            <tr><td class="state-name">SC</td><td>LLR — BCC Agendas</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www.llr.sc.gov/bcc/agendas.aspx" target="_blank">llr.sc.gov ↗</a></td></tr>
+            <tr><td class="state-name">SD</td><td>DLR — Plumbing Commission Meetings</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://dlr.sd.gov/plumbing/commission_meetings.aspx" target="_blank">dlr.sd.gov ↗</a></td></tr>
+            <tr><td class="state-name">TN</td><td>TN Commerce — Fire Prevention</td><td><span class="badge b-nfpa">NFPA</span></td><td class="state-url"><a href="https://www.tn.gov/commerce/fire-prevention.html" target="_blank">tn.gov ↗</a></td></tr>
+            <tr><td class="state-name">TX</td><td>SECO — State Energy Conservation Office</td><td><span class="badge b-ashrae">Energy</span></td><td class="state-url"><a href="https://comptroller.texas.gov/programs/seco/" target="_blank">comptroller.texas.gov ↗</a></td></tr>
+            <tr><td class="state-name">TX</td><td>TSBPE — Board Meetings</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://tsbpe.texas.gov/about-us/meetings/" target="_blank">tsbpe.texas.gov ↗</a></td></tr>
+            <tr><td class="state-name">TX</td><td>TDLR — Electrical Safety (NEC)</td><td><span class="badge b-nec">NEC</span></td><td class="state-url"><a href="https://www.tdlr.texas.gov/electrical/electrical.htm" target="_blank">tdlr.texas.gov ↗</a></td></tr>
+            <tr><td class="state-name">UT</td><td>Energy — Events</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://energy.utah.gov/events/" target="_blank">energy.utah.gov ↗</a></td></tr>
+            <tr><td class="state-name">UT</td><td>DOPL — Plumbing</td><td><span class="badge b-icc">IPC</span></td><td class="state-url"><a href="https://dopl.utah.gov/pl/" target="_blank">dopl.utah.gov ↗</a></td></tr>
+            <tr><td class="state-name">VA</td><td>DHCD — SBCTRB</td><td><span class="badge b-icc">IBC</span></td><td class="state-url"><a href="https://www.dhcd.virginia.gov/state-building-code-technical-review-board-sbctrb" target="_blank">dhcd.virginia.gov ↗</a></td></tr>
+            <tr><td class="state-name">VA</td><td>DHCD — Board of Housing & Community Development</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://www.dhcd.virginia.gov/board-housing-and-community-development-bhcd" target="_blank">dhcd.virginia.gov ↗</a></td></tr>
+            <tr><td class="state-name">VT</td><td>DPS — Building Energy Standards</td><td><span class="badge b-ashrae">Energy</span></td><td class="state-url"><a href="https://publicservice.vermont.gov/content/building-energy-standards-update" target="_blank">publicservice.vermont.gov ↗</a></td></tr>
+            <tr><td class="state-name">VT</td><td>Fire Safety — Building Code / ADA Board</td><td><span class="badge b-icc">IBC</span></td><td class="state-url"><a href="https://firesafety.vermont.gov/buildingcode/ada/board" target="_blank">firesafety.vermont.gov ↗</a></td></tr>
+            <tr><td class="state-name">WA</td><td>SBCC — Meeting Schedules & Agendas</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://sbcc.wa.gov/meeting-schedules-agendas" target="_blank">sbcc.wa.gov ↗</a></td></tr>
+            <tr><td class="state-name">WA</td><td>SBCC News</td><td><span class="badge b-state">News</span></td><td class="state-url"><a href="https://sbcc.wa.gov/news" target="_blank">sbcc.wa.gov ↗</a></td></tr>
+            <tr><td class="state-name">WA</td><td>SBCC — Energy Code TAG</td><td><span class="badge b-ashrae">Energy</span></td><td class="state-url"><a href="https://sbcc.wa.gov/meeting-schedules-agendas/technical-advisory-groups/energy-code-tag" target="_blank">sbcc.wa.gov ↗</a></td></tr>
+            <tr><td class="state-name">WA</td><td>SBCC — Fire Code TAG</td><td><span class="badge b-nfpa">NFPA</span></td><td class="state-url"><a href="https://sbcc.wa.gov/meeting-schedules-agendas/technical-advisory-groups/fire-code-tag" target="_blank">sbcc.wa.gov ↗</a></td></tr>
+            <tr><td class="state-name">WA</td><td>LNI — Plumber Advisory Board</td><td><span class="badge b-icc">IPC</span></td><td class="state-url"><a href="https://lni.wa.gov/licensing-permits/plumbing/plumber-advisory-board" target="_blank">lni.wa.gov ↗</a></td></tr>
+            <tr><td class="state-name">WI</td><td>DSPS — Commercial Building Code Meetings</td><td><span class="badge b-state">Agenda</span></td><td class="state-url"><a href="https://dsps.wi.gov/Pages/BoardsCouncils/CommercialBuilding/Meetings.aspx" target="_blank">dsps.wi.gov ↗</a></td></tr>
+            <tr><td class="state-name">WI</td><td>DSPS — Plumbing Board</td><td><span class="badge b-icc">IPC</span></td><td class="state-url"><a href="https://dsps.wi.gov/Pages/BoardsCouncils/Plumbing/Default.aspx" target="_blank">dsps.wi.gov ↗</a></td></tr>
+            <tr><td class="state-name">WV</td><td>Fire Commission Meetings</td><td><span class="badge b-nfpa">NFPA</span></td><td class="state-url"><a href="https://firemarshal.wv.gov/firecommission/Pages/Meetings.aspx" target="_blank">firemarshal.wv.gov ↗</a></td></tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- SCAN PANEL -->
+      <div class="panel" id="panel-scan">
+        <div class="card">
+          <div class="card-title">Run a scan</div>
+          <div class="fields-row">
+            <div class="field"><div class="field-label">Email</div><input type="text" id="email" value="logan.meares@fiscalnote.com"/></div>
+            <div class="field"><div class="field-label">Slack</div><input type="text" value="Personal DM"/></div>
+            <div class="field"><div class="field-label">Frequency</div><select><option>Mon / Wed / Fri</option><option>Daily</option><option>Weekly</option></select></div>
+          </div>
+          <div class="card-title" style="margin-bottom:8px;">Scan scope</div>
+          <div class="scan-grid">
+            <button class="scope-btn selected" id="s-all" onclick="setScope('all')"><span class="scope-title">All sources (240+)</span><span class="scope-sub">Full ICC · NFPA · ASHRAE · NEC · state sites</span></button>
+            <button class="scope-btn" id="s-icc" onclick="setScope('icc')"><span class="scope-title">ICC Suite only</span><span class="scope-sub">IBC · IRC · IFC · IMC · IPC · IECC · IEBC</span></button>
+            <button class="scope-btn" id="s-nfpa" onclick="setScope('nfpa')"><span class="scope-title">NFPA / NEC only</span><span class="scope-sub">NFPA 1 · 13 · 70/NEC · 72 · 99 · 101</span></button>
+            <button class="scope-btn" id="s-ashrae" onclick="setScope('ashrae')"><span class="scope-title">ASHRAE / Energy only</span><span class="scope-sub">90.1 · IECC · state energy codes</span></button>
+          </div>
+          <div class="card-title" style="margin-bottom:8px;">Track types</div>
+          <div class="check-grid">
+            <label class="check-item"><input type="checkbox" checked> ICC code adoptions</label>
+            <label class="check-item"><input type="checkbox" checked> NFPA / NEC adoptions</label>
+            <label class="check-item"><input type="checkbox" checked> ASHRAE / energy codes</label>
+            <label class="check-item"><input type="checkbox" checked> Board meeting agendas</label>
+            <label class="check-item"><input type="checkbox" checked> Proposed rulemaking</label>
+            <label class="check-item"><input type="checkbox" checked> Flag notable items</label>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:0.5rem;">
+            <button class="btn btn-dark" onclick="openClaude()">Open in Claude to run scan ↗</button>
+            <button class="btn" onclick="copyPrompt()">Copy scan prompt</button>
+          </div>
+          <div class="hint-text">This tracker is a standalone file. Click "Open in Claude" to run a live AI scan in your Claude chat, or copy the prompt and paste it there.</div>
+          <div id="copy-confirm" style="font-size:12px; color:#16a34a; margin-top:6px; display:none;">✓ Prompt copied to clipboard</div>
+        </div>
+      </div>
+
+    </div><!-- end main -->
+  </div><!-- end two-col -->
+</div><!-- end container -->
+
+<footer>Building Code Tracker · logan.meares@fiscalnote.com · Last scanned April 29, 2026 · 240+ sources across 50 states + DC · ICC · NFPA · ASHRAE · NEC</footer>
+
+<script>
+function navTo(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'" + id + "'")) {
+      n.classList.add('active');
+    }
+  });
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+let scope = 'all';
+function setScope(s) {
+  scope = s;
+  ['all','icc','nfpa','ashrae'].forEach(k => {
+    document.getElementById('s-' + k).classList.toggle('selected', k === s);
+  });
+}
+
+function buildPrompt() {
+  const email = document.getElementById('email').value;
+  const scopeLabel = {
+    all: 'all 240+ sources (original 157 state sites + ICC, NFPA, ASHRAE, NEC national trackers)',
+    icc: 'ICC suite sources — IBC, IRC, IFC, IMC, IPC, IFGC, IECC, IEBC, IWUIC state adoptions',
+    nfpa: 'NFPA and NEC sources — NFPA 1, 13, 70/NEC, 72, 99, 101 state adoptions and rulemaking',
+    ashrae: 'ASHRAE and energy code sources — 90.1, IECC, and all state energy code pages'
+  }[scope];
+  return `Please run a building code monitoring scan across ${scopeLabel}. Track any state-level adoption, amendment, proposed rulemaking, or public comment period for: ICC codes (IBC, IRC, IFC, IMC, IPC, IFGC, IECC, IEBC, IWUIC), ASHRAE standards (90.1, 62.1, 189.1), NFPA standards (NFPA 1, 13, 70/NEC, 72, 99, 101), and any state energy code updates. Also include upcoming board and commission meeting agendas across all tracked states. Flag any significantly notable code adoptions, major amendments, or important upcoming public comment deadlines. Format as a clean digest organized first by priority/notable flags, then by code family, then by state. Send to ${email} and Slack personal DM.`;
+}
+
+function openClaude() {
+  const prompt = buildPrompt();
+  const encoded = encodeURIComponent(prompt);
+  window.open('https://claude.ai/new?q=' + encoded, '_blank');
+}
+
+function copyPrompt() {
+  navigator.clipboard.writeText(buildPrompt()).then(() => {
+    const el = document.getElementById('copy-confirm');
+    el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 3000);
+  });
+}
+</script>
+</body>
+</html>
